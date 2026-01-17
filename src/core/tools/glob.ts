@@ -1,6 +1,6 @@
 import type { Tool } from "./types";
 import { Glob } from "bun";
-import { SANDBOX_DIR } from "../config";
+import { SANDBOX_DIR } from "../../shared/config";
 
 const IGNORE_DIRS = new Set(["node_modules", ".git", ".hg", ".svn", "dist", "build"]);
 

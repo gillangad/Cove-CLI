@@ -1,5 +1,5 @@
 import type { Tool, ToolInput } from "./types";
-import { SANDBOX_DIR } from "../config";
+import { SANDBOX_DIR } from "../../shared/config";
 
 const MAX_OUTPUT = 30 * 1024;
 const HALF = 15 * 1024;

@@ -1,7 +1,7 @@
 import type { Tool } from "./types";
 import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { SANDBOX_DIR } from "../config";
+import { SANDBOX_DIR } from "../../shared/config";
 
 const IGNORE_DIRS = new Set(["node_modules", ".git", ".hg", ".svn", "dist", "build"]);
 const MAX_RESULTS = 100;

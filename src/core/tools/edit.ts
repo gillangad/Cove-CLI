@@ -1,6 +1,6 @@
 import type { Tool, ToolInput } from "./types";
 import { resolve } from "node:path";
-import { SANDBOX_DIR } from "../config";
+import { SANDBOX_DIR } from "../../shared/config";
 
 function safePath(p: string): string | null {
   const resolved = resolve(SANDBOX_DIR, p);

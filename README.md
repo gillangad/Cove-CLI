@@ -1,6 +1,6 @@
 # Cove
 
-A minimal coding agent powered by Gemini.
+A minimal coding agent powered by Gemini or GLM
 
 ## Install
 

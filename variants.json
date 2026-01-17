@@ -1,0 +1,14 @@
+{
+  "default": {
+    "tools": ["read", "edit", "bash", "grep", "glob"],
+    "prompt": "./prompts/default.md"
+  },
+  "ml": {
+    "tools": ["read", "edit", "bash", "grep", "glob"],
+    "prompt": "./prompts/ml.md"
+  },
+  "code": {
+    "tools": ["read", "edit", "bash", "grep", "glob"],
+    "prompt": "./prompts/code.md"
+  }
+}
