@@ -7,9 +7,10 @@ interface StatusBarProps {
   contextPercent: number;
   variant?: string;
   isThinking?: boolean;
+  verbose?: boolean;
 }
 
-export function StatusBar({ model, contextPercent, variant, isThinking }: StatusBarProps) {
+export function StatusBar({ model, contextPercent, variant, isThinking, verbose }: StatusBarProps) {
   const contextColor = contextPercent > 80 ? theme.error : contextPercent > 50 ? theme.warning : theme.success;
   
   return (
@@ -21,6 +22,9 @@ export function StatusBar({ model, contextPercent, variant, isThinking }: Status
         <Text color={theme.muted}>/exit</Text>
       </Box>
       <Box>
+        {verbose && (
+          <Text color={theme.warning}>VERBOSE · </Text>
+        )}
         {variant && variant !== "default" && (
           <Text color={theme.ocean}>{variant} · </Text>
         )}

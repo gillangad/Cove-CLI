@@ -1,6 +1,7 @@
 import type { Tool } from "./tools/types";
 import { createProvider, type Message, type ToolCall } from "./providers";
 import { Spinner } from "../shared/spinner";
+import { Logger } from "../shared/Logger";
 
 const MODEL_CONTEXT_LIMIT = 1_000_000;
 const CHARS_PER_TOKEN = 4;
@@ -68,9 +69,11 @@ export class Agent {
 
   async chat(userMessage: string, callbacks?: ChatCallbacks): Promise<string> {
     this.conversation.push({ role: "user", content: userMessage });
+    Logger.debug("User message", userMessage);
 
     while (true) {
       this.spinner.start();
+      Logger.llm("Starting generation");
       
       let text = "";
       const toolCalls: ToolCall[] = [];
@@ -93,11 +96,13 @@ export class Agent {
           }
 
           if (chunk.type === "tool_call" && chunk.toolCall) {
+            Logger.llm("Tool call received", chunk.toolCall.name);
             toolCalls.push(chunk.toolCall);
           }
         }
       } catch (error) {
         this.spinner.stop();
+        Logger.debug("LLM error", error);
         throw error;
       }
 
@@ -117,9 +122,11 @@ export class Agent {
           }
 
           try {
+            Logger.tool(call.name, call.args, "executing...");
             const toolResult = await tool.execute(call.args);
             const response = typeof toolResult === "string" ? { output: toolResult } : toolResult;
             const success = !("error" in response);
+            Logger.tool(call.name, call.args, response);
             if (callbacks?.onToolCall) {
               callbacks.onToolCall(call.name, success);
             } else {
@@ -131,6 +138,7 @@ export class Agent {
               content: JSON.stringify(response),
             });
           } catch (error) {
+            Logger.debug("Tool execution error", { tool: call.name, error: String(error) });
             callbacks?.onToolCall?.(call.name, false);
             this.conversation.push({
               role: "tool",
@@ -145,6 +153,7 @@ export class Agent {
 
       if (text) {
         this.conversation.push({ role: "assistant", content: text });
+        Logger.debug("Assistant response length", text.length);
         return text;
       }
 

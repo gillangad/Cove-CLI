@@ -4,6 +4,11 @@ import { editTool } from "./edit";
 import { bashTool } from "./bash";
 import { grepTool } from "./grep";
 import { globTool } from "./glob";
+import { writeTool } from "./write";
+import { deleteTool } from "./delete";
+import { moveTool } from "./move";
+import { batchReadTool } from "./batch-read";
+import { searchReplaceTool } from "./search-replace";
 
 export const toolRegistry: Record<string, Tool> = {
   read: readTool,
@@ -11,6 +16,11 @@ export const toolRegistry: Record<string, Tool> = {
   bash: bashTool,
   grep: grepTool,
   glob: globTool,
+  write: writeTool,
+  delete: deleteTool,
+  move: moveTool,
+  batch_read: batchReadTool,
+  search_replace: searchReplaceTool,
 };
 
 export function getTools(names: string[]): Tool[] {

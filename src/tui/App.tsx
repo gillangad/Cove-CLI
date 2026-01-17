@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Box, useInput, useApp } from "ink";
 import { Header, Chat, Input, StatusBar } from "./components";
 import { Sessions } from "./dialogs";
@@ -6,6 +6,9 @@ import { Agent } from "../core/agent";
 import { getTools } from "../core/tools/registry";
 import { loadVariant } from "../shared/variants";
 import { loadSession, type SessionMetadata } from "../core/session";
+import { shellManager } from "../shared/shell-manager";
+import { Logger } from "../shared/Logger";
+import { CommandHistory } from "../shared/CommandHistory";
 
 interface ChatMessage {
   role: "user" | "assistant" | "tool";
@@ -23,6 +26,10 @@ export function App() {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [contextPercent, setContextPercent] = useState(0);
   const [showSessions, setShowSessions] = useState(false);
+  const [verboseMode, setVerboseMode] = useState(false);
+  
+  // Command history (session-only, not persistent)
+  const commandHistory = useMemo(() => new CommandHistory(), []);
 
   // Initialize agent (env is already loaded in index.tsx)
   useEffect(() => {
@@ -62,7 +69,17 @@ export function App() {
     if (trimmed === "/help") {
       setMessages(prev => [...prev, {
         role: "assistant",
-        content: "Commands:\n/exit - Exit Cove\n/clear - Clear conversation\n/help - Show this help\n/context - Show context usage\n/compact - Compress context"
+        content: "Commands:\n/exit - Exit Cove\n/clear - Clear conversation\n/help - Show this help\n/context - Show context usage\n/compact - Compress context\n/verbose - Toggle verbose mode\n/sessions - Manage sessions\n/bashes - List background shells\n!<cmd> - Run shell command\n!<cmd> & - Run in background"
+      }]);
+      return;
+    }
+
+    if (trimmed === "/verbose") {
+      const enabled = Logger.toggle();
+      setVerboseMode(enabled);
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `Verbose mode ${enabled ? "enabled" : "disabled"}`
       }]);
       return;
     }
@@ -78,6 +95,97 @@ export function App() {
 
     if (trimmed === "/sessions") {
       setShowSessions(true);
+      return;
+    }
+
+    // Handle shell commands (!cmd)
+    if (trimmed.startsWith("!")) {
+      const cmd = trimmed.slice(1).trim();
+      if (cmd) {
+        setMessages(prev => [...prev, { role: "user", content: trimmed }]);
+        
+        if (cmd.endsWith("&")) {
+          // Background process
+          const bgCmd = cmd.slice(0, -1).trim();
+          const id = shellManager.spawn(bgCmd);
+          setMessages(prev => [...prev, { 
+            role: "assistant", 
+            content: `Started background shell ${id}: ${bgCmd}` 
+          }]);
+        } else {
+          // Foreground process
+          setIsThinking(true);
+          try {
+            const proc = Bun.spawn(["bash", "-c", cmd], {
+              cwd: process.cwd(),
+              stdout: "pipe",
+              stderr: "pipe",
+            });
+            const [stdout, stderr] = await Promise.all([
+              new Response(proc.stdout).text(),
+              new Response(proc.stderr).text(),
+            ]);
+            await proc.exited;
+            const output = (stdout + stderr).trim() || "(no output)";
+            setMessages(prev => [...prev, { role: "assistant", content: output }]);
+          } catch (error) {
+            setMessages(prev => [...prev, { 
+              role: "assistant", 
+              content: `Error: ${error instanceof Error ? error.message : String(error)}` 
+            }]);
+          } finally {
+            setIsThinking(false);
+          }
+        }
+      }
+      return;
+    }
+
+    // Handle /bashes command
+    if (trimmed === "/bashes") {
+      const shells = shellManager.list();
+      if (shells.length === 0) {
+        setMessages(prev => [...prev, { role: "assistant", content: "No background shells." }]);
+      } else {
+        const lines = shells.map(s => {
+          const status = s.running ? "● running" : `○ exited (${s.exitCode})`;
+          return `${s.id}: ${status} ${s.runtime} - ${s.command}`;
+        });
+        setMessages(prev => [...prev, { role: "assistant", content: "Background Shells:\n" + lines.join("\n") }]);
+      }
+      return;
+    }
+
+    // Handle /output <id> command
+    if (trimmed.startsWith("/output ")) {
+      const id = trimmed.slice(8).trim();
+      const output = shellManager.getOutput(id, 30);
+      if (!output) {
+        setMessages(prev => [...prev, { role: "assistant", content: `Shell ${id} not found.` }]);
+      } else {
+        const lines: string[] = [];
+        if (output.stdout.length > 0) {
+          lines.push("stdout:", ...output.stdout);
+        }
+        if (output.stderr.length > 0) {
+          lines.push("stderr:", ...output.stderr);
+        }
+        if (lines.length === 0) {
+          lines.push("No output yet.");
+        }
+        setMessages(prev => [...prev, { role: "assistant", content: lines.join("\n") }]);
+      }
+      return;
+    }
+
+    // Handle /kill <id> command
+    if (trimmed.startsWith("/kill ")) {
+      const id = trimmed.slice(6).trim();
+      if (shellManager.kill(id)) {
+        setMessages(prev => [...prev, { role: "assistant", content: `Killed ${id}` }]);
+      } else {
+        setMessages(prev => [...prev, { role: "assistant", content: `Shell ${id} not found.` }]);
+      }
       return;
     }
 
@@ -149,11 +257,13 @@ export function App() {
             onChange={setInput}
             onSubmit={handleSubmit}
             disabled={isThinking}
+            history={commandHistory}
           />
           <StatusBar
             model="glm-4.7"
             contextPercent={contextPercent}
             isThinking={isThinking}
+            verbose={verboseMode}
           />
         </>
       )}
