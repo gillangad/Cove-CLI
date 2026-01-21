@@ -1,12 +1,9 @@
 import type { Tool, ToolInput } from "./types";
 import { resolve, dirname } from "node:path";
 import { rename, mkdir, stat } from "node:fs/promises";
-import { SANDBOX_DIR } from "../../shared/config";
 
-function safePath(p: string): string | null {
-  const resolved = resolve(SANDBOX_DIR, p);
-  if (!resolved.startsWith(SANDBOX_DIR)) return null;
-  return resolved;
+function resolvePath(p: string): string {
+  return resolve(process.cwd(), p);
 }
 
 export const moveTool: Tool = {
@@ -15,18 +12,15 @@ export const moveTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      source: { type: "string", description: "Source path relative to sandbox" },
-      destination: { type: "string", description: "Destination path relative to sandbox" },
+      source: { type: "string", description: "Source path (relative or absolute)" },
+      destination: { type: "string", description: "Destination path (relative or absolute)" },
     },
     required: ["source", "destination"],
   },
   async execute(input: ToolInput) {
     const { source, destination } = input as { source: string; destination: string };
-    const srcPath = safePath(source);
-    const destPath = safePath(destination);
-
-    if (!srcPath) return { error: "Source path outside sandbox" };
-    if (!destPath) return { error: "Destination path outside sandbox" };
+    const srcPath = resolvePath(source);
+    const destPath = resolvePath(destination);
 
     try {
       // Check if source exists
@@ -39,9 +33,9 @@ export const moveTool: Tool = {
       const destDir = dirname(destPath);
       await mkdir(destDir, { recursive: true });
 
-      // Move the file/directory
+      // Move file/directory
       await rename(srcPath, destPath);
-      
+
       return `Moved ${source} to ${destination}`;
     } catch (e) {
       return { error: `Failed to move: ${e}` };

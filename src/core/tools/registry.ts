@@ -9,6 +9,8 @@ import { deleteTool } from "./delete";
 import { moveTool } from "./move";
 import { batchReadTool } from "./batch-read";
 import { searchReplaceTool } from "./search-replace";
+import { testTool } from "./test";
+import { todoTool } from "./todo";
 
 export const toolRegistry: Record<string, Tool> = {
   read: readTool,
@@ -21,6 +23,8 @@ export const toolRegistry: Record<string, Tool> = {
   move: moveTool,
   batch_read: batchReadTool,
   search_replace: searchReplaceTool,
+  test: testTool,
+  todo: todoTool,
 };
 
 export function getTools(names: string[]): Tool[] {

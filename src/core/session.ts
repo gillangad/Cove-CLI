@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { getConfigDir } from "../shared/config";
-import type { Message } from "./providers/types";
+import type { CanonicalMessage } from "./llm/types";
 
 export interface SessionMetadata {
   id: string;
@@ -9,11 +9,11 @@ export interface SessionMetadata {
   createdAt: string;
   updatedAt: string;
   variant: string;
-  model: string;
+  modelId: string;
 }
 
 export interface Session extends SessionMetadata {
-  conversation: Message[];
+  conversation: CanonicalMessage[];
 }
 
 function getSessionsDir(): string {
@@ -28,7 +28,7 @@ function generateId(): string {
   return `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function extractTitle(conversation: Message[]): string {
+function extractTitle(conversation: CanonicalMessage[]): string {
   const firstUserMessage = conversation.find((m) => m.role === "user" && m.content);
   if (firstUserMessage?.content) {
     const title = firstUserMessage.content.slice(0, 50);
@@ -38,12 +38,12 @@ function extractTitle(conversation: Message[]): string {
 }
 
 export function saveSession(
-  conversation: Message[],
+  conversation: CanonicalMessage[],
   options: {
     id?: string;
     title?: string;
     variant?: string;
-    model?: string;
+    modelId?: string;
   } = {}
 ): Session {
   const sessionsDir = getSessionsDir();
@@ -71,7 +71,7 @@ export function saveSession(
     createdAt,
     updatedAt: now,
     variant: options.variant || "default",
-    model: options.model || "gemini",
+    modelId: options.modelId || "glm/glm-4.7",
     conversation,
   };
   
@@ -112,7 +112,7 @@ export function listSessions(): SessionMetadata[] {
           createdAt: session.createdAt,
           updatedAt: session.updatedAt,
           variant: session.variant,
-          model: session.model,
+          modelId: session.modelId,
         });
       } catch {
         // Skip invalid files

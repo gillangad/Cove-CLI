@@ -1,26 +1,22 @@
 import type { Tool } from "./types";
 import { resolve } from "node:path";
-import { SANDBOX_DIR } from "../../shared/config";
 
-function safePath(p: string): string | null {
-  const resolved = resolve(SANDBOX_DIR, p);
-  if (!resolved.startsWith(SANDBOX_DIR)) return null;
-  return resolved;
+function resolvePath(p: string): string {
+  return resolve(process.cwd(), p);
 }
 
 export const readTool: Tool = {
   name: "read",
-  description: "Read the contents of a file at the given path (relative to sandbox).",
+  description: "Read the contents of a file at the given path.",
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "File path relative to sandbox" },
+      path: { type: "string", description: "File path (relative or absolute)" },
     },
     required: ["path"],
   },
   async execute(input) {
-    const path = safePath(input.path as string);
-    if (!path) return { error: "Path outside sandbox" };
+    const path = resolvePath(input.path as string);
     try {
       const content = await Bun.file(path).text();
       return content;

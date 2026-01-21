@@ -19,7 +19,8 @@ export function RetryDialog({ toolName, errorMessage, attempt, onChoice }: Retry
     { label: "Abort", value: "abort" },
   ];
 
-  useInput((input, key) => {
+  useInput(
+    (input, key) => {
     if (key.leftArrow) {
       setSelected(prev => Math.max(0, prev - 1));
     } else if (key.rightArrow) {
@@ -33,7 +34,9 @@ export function RetryDialog({ toolName, errorMessage, attempt, onChoice }: Retry
     } else if (input === "a" || key.escape) {
       onChoice("abort");
     }
-  });
+    },
+    { isActive: true }
+  );
 
   return (
     <Box
@@ -49,7 +52,7 @@ export function RetryDialog({ toolName, errorMessage, attempt, onChoice }: Retry
       
       <Box marginBottom={1}>
         <Text color={theme.muted}>Tool: </Text>
-        <Text color={theme.coral}>{toolName}</Text>
+        <Text color={theme.accent}>{toolName}</Text>
         <Text color={theme.muted}> (attempt {attempt})</Text>
       </Box>
       
@@ -61,7 +64,7 @@ export function RetryDialog({ toolName, errorMessage, attempt, onChoice }: Retry
         {options.map((opt, i) => (
           <Text
             key={opt.value}
-            color={i === selected ? theme.peach : theme.muted}
+            color={i === selected ? theme.accent : theme.muted}
             bold={i === selected}
           >
             {i === selected ? `[${opt.label}]` : ` ${opt.label} `}

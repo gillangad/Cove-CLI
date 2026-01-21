@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@google/generative-ai": "latest",
     "ink": "^6.6.0",
     "ink-text-input": "^6.0.0",

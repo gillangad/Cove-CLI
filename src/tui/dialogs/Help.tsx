@@ -17,29 +17,29 @@ export function HelpDialog({ onClose }: HelpDialogProps) {
     <Box
       flexDirection="column"
       borderStyle="double"
-      borderColor={theme.peach}
+      borderColor={theme.accent}
       paddingX={2}
       paddingY={1}
     >
       <Box marginBottom={1}>
-        <Text color={theme.peach} bold>Help - Cove Commands</Text>
+        <Text color={theme.accent} bold>Help - Cove Commands</Text>
       </Box>
       
       <Box marginBottom={1} flexDirection="column">
-        <Text bold color={theme.coral}>General</Text>
+        <Text bold color={theme.primary}>General</Text>
         <Text>  /help     - Show this help</Text>
         <Text>  /exit     - Exit Cove</Text>
         <Text>  /clear    - Clear conversation</Text>
       </Box>
 
       <Box marginBottom={1} flexDirection="column">
-        <Text bold color={theme.coral}>Context</Text>
+        <Text bold color={theme.primary}>Context</Text>
         <Text>  /context  - Show context usage</Text>
         <Text>  /compact  - Compress context</Text>
       </Box>
 
       <Box marginBottom={1} flexDirection="column">
-        <Text bold color={theme.coral}>Sessions</Text>
+        <Text bold color={theme.primary}>Sessions</Text>
         <Text>  /sessions - List saved sessions</Text>
         <Text>  /save     - Save current session</Text>
         <Text>  /load id  - Load a session</Text>
@@ -47,7 +47,7 @@ export function HelpDialog({ onClose }: HelpDialogProps) {
       </Box>
 
       <Box marginBottom={1} flexDirection="column">
-        <Text bold color={theme.coral}>Shell</Text>
+        <Text bold color={theme.primary}>Shell</Text>
         <Text>  !cmd      - Run shell command</Text>
         <Text>  !cmd &    - Run in background</Text>
         <Text>  /bashes   - List background shells</Text>

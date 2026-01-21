@@ -1,6 +1,13 @@
-import type { Tool } from "./tools/types";
-import { createProvider, type Message, type ToolCall } from "./providers";
-import { Spinner } from "../shared/spinner";
+import type { Tool, DiffInfo } from "./tools/types";
+import type { CanonicalMessage, CanonicalToolCall } from "./llm/types";
+import { createLLMClient } from "./llm/router";
+import {
+  defaultModelForProvider,
+  getDefaultModel,
+  getModelById,
+  resolveModelId,
+  type ProviderName,
+} from "./llm/models";
 import { Logger } from "../shared/Logger";
 
 const MODEL_CONTEXT_LIMIT = 1_000_000;
@@ -8,26 +15,48 @@ const CHARS_PER_TOKEN = 4;
 
 export interface ChatCallbacks {
   onChunk?: (text: string) => void;
-  onToolCall?: (name: string, success: boolean) => void;
+  onThinking?: (text: string) => void;
+  onToolCall?: (name: string, args: Record<string, unknown>, success: boolean, diff?: DiffInfo) => void;
+  // Called when model finishes text and is about to call tools (allows UI to finalize text block)
+  onTextComplete?: () => void;
+  // TUI-only: stream tool call assembly (OpenAI-compatible).
+  onToolCallDelta?: (delta: {
+    index: number;
+    id?: string;
+    name?: string;
+    argsText?: string;
+  }) => void;
+}
+
+export class AbortError extends Error {
+  constructor(public partialText: string) {
+    super("Response aborted");
+    this.name = "AbortError";
+  }
 }
 
 export class Agent {
-  private provider;
+  private llm;
   private tools: Tool[];
-  private prompt: string;
-  private conversation: Message[] = [];
-  private spinner = new Spinner();
+  private conversation: CanonicalMessage[];
 
-  constructor(tools: Tool[], prompt: string, model?: string) {
+  private providerScope: ProviderName;
+  private currentModelId: string;
+
+  constructor(tools: Tool[], prompt: string, modelId?: string) {
     this.tools = tools;
-    this.prompt = prompt;
-    this.provider = createProvider(tools, prompt, model);
+    this.providerScope = getDefaultModel().provider;
+    this.currentModelId = modelId ?? getDefaultModel().id;
+    this.llm = createLLMClient(this.currentModelId);
+
+    // Store the system prompt in the canonical conversation.
+    this.conversation = [{ role: "system", content: prompt }];
   }
 
   getContextUsage(): { used: number; limit: number; percent: number } {
-    let charCount = this.prompt.length;
+    let charCount = 0;
     for (const msg of this.conversation) {
-      if (msg.content) charCount += msg.content.length;
+      charCount += msg.content.length;
       if (msg.toolCalls) charCount += JSON.stringify(msg.toolCalls).length;
     }
     const usedTokens = Math.round(charCount / CHARS_PER_TOKEN);
@@ -35,79 +64,129 @@ export class Agent {
     return { used: usedTokens, limit: MODEL_CONTEXT_LIMIT, percent };
   }
 
-  getConversation(): Message[] {
+  getConversation(): CanonicalMessage[] {
     return this.conversation;
   }
 
-  setConversation(conversation: Message[]) {
+  setConversation(conversation: CanonicalMessage[]) {
     this.conversation = conversation;
   }
 
   clearConversation() {
-    this.conversation = [];
+    const system = this.conversation.find((m) => m.role === "system");
+    this.conversation = system ? [system] : [];
+  }
+
+  getModelId(): string {
+    return this.currentModelId;
+  }
+
+  setProvider(name: ProviderName) {
+    this.providerScope = name;
+    const model = defaultModelForProvider(name);
+    this.setModel(model.id);
+  }
+
+  setModel(modelIdOrShort: string) {
+    const resolved = resolveModelId(modelIdOrShort, this.providerScope);
+    if (!resolved) throw new Error(`Unknown model: ${modelIdOrShort}`);
+    const model = getModelById(resolved);
+    if (!model) throw new Error(`Unknown model: ${modelIdOrShort}`);
+    this.currentModelId = model.id;
+    this.llm = createLLMClient(this.currentModelId);
   }
 
   async compact(): Promise<string> {
     this.conversation.push({
       role: "user",
-      content: "Summarize our conversation so far in a concise paragraph. Focus on key decisions, code changes, and current state. This will replace the conversation history.",
+      content:
+        "Summarize our conversation so far in a concise paragraph. Focus on key decisions, code changes, and current state. This will replace the conversation history.",
     });
 
     let summary = "";
-    for await (const chunk of this.provider.chat(this.conversation)) {
-      if (chunk.type === "text" && chunk.text) {
-        summary += chunk.text;
-      }
+    for await (const event of this.llm.chat({
+      messages: this.conversation,
+      tools: this.tools,
+    })) {
+      if (event.type === "text_delta") summary += event.text;
     }
 
+    const system = this.conversation.find((m) => m.role === "system");
     this.conversation = [
+      ...(system ? [system] : []),
       { role: "user", content: `[Conversation Summary]\n${summary}` },
       { role: "assistant", content: "Got it. I have the context from our previous conversation." },
     ];
     return summary;
   }
 
-  async chat(userMessage: string, callbacks?: ChatCallbacks): Promise<string> {
+  async chat(userMessage: string, callbacks?: ChatCallbacks, abortSignal?: AbortSignal): Promise<string> {
     this.conversation.push({ role: "user", content: userMessage });
     Logger.debug("User message", userMessage);
 
     while (true) {
-      this.spinner.start();
       Logger.llm("Starting generation");
-      
+
       let text = "";
-      const toolCalls: ToolCall[] = [];
-      let firstChunk = true;
+      const toolCalls: CanonicalToolCall[] = [];
 
       try {
-        for await (const chunk of this.provider.chat(this.conversation)) {
-          if (firstChunk) {
-            this.spinner.stop();
-            firstChunk = false;
+        for await (const event of this.llm.chat({
+          messages: this.conversation,
+          tools: this.tools,
+          abortSignal,
+        })) {
+          if (abortSignal?.aborted) {
+            if (text) this.conversation.push({ role: "assistant", content: text });
+            throw new AbortError(text);
           }
 
-          if (chunk.type === "text" && chunk.text) {
-            if (callbacks?.onChunk) {
-              callbacks.onChunk(chunk.text);
-            } else {
-              process.stdout.write(chunk.text);
+          if (event.type === "text_delta" && event.text) {
+            callbacks?.onChunk?.(event.text);
+            text += event.text;
+          }
+
+          if (event.type === "thinking_delta" && event.text) {
+            callbacks?.onThinking?.(event.text);
+          }
+
+          if (event.type === "tool_call") {
+            // Notify that text is complete before first tool call
+            if (toolCalls.length === 0 && text) {
+              callbacks?.onTextComplete?.();
             }
-            text += chunk.text;
+            toolCalls.push(event.toolCall);
           }
 
-          if (chunk.type === "tool_call" && chunk.toolCall) {
-            Logger.llm("Tool call received", chunk.toolCall.name);
-            toolCalls.push(chunk.toolCall);
+          if (event.type === "tool_call_delta") {
+            // Notify that text is complete when we start seeing tool deltas
+            if (text && toolCalls.length === 0) {
+              callbacks?.onTextComplete?.();
+            }
+            callbacks?.onToolCallDelta?.({
+              index: event.index,
+              id: event.id,
+              name: event.name,
+              argsText: event.argsText,
+            });
+          }
+
+          if (event.type === "error") {
+            throw event.error;
           }
         }
       } catch (error) {
-        this.spinner.stop();
+        if (error instanceof AbortError) throw error;
+        if (error instanceof Error && error.name === "AbortError") {
+          if (text) this.conversation.push({ role: "assistant", content: text });
+          throw new AbortError(text);
+        }
         Logger.debug("LLM error", error);
         throw error;
       }
 
       if (toolCalls.length > 0) {
-        this.conversation.push({ role: "assistant", toolCalls });
+        this.conversation.push({ role: "assistant", content: text, toolCalls });
 
         for (const call of toolCalls) {
           const tool = this.tools.find((t) => t.name === call.name);
@@ -116,8 +195,9 @@ export class Agent {
               role: "tool",
               toolCallId: call.id,
               content: JSON.stringify({ error: `Unknown tool: ${call.name}` }),
+              providerMeta: { toolName: call.name, thoughtSignature: call.thoughtSignature },
             });
-            callbacks?.onToolCall?.(call.name, false);
+            callbacks?.onToolCall?.(call.name, call.args as Record<string, unknown>, false);
             continue;
           }
 
@@ -125,25 +205,26 @@ export class Agent {
             Logger.tool(call.name, call.args, "executing...");
             const toolResult = await tool.execute(call.args);
             const response = typeof toolResult === "string" ? { output: toolResult } : toolResult;
-            const success = !("error" in response);
+            const success = !(response && typeof response === "object" && "error" in response && response.error);
+            const diff = response && typeof response === "object" && "diff" in response ? (response as any).diff : undefined;
             Logger.tool(call.name, call.args, response);
-            if (callbacks?.onToolCall) {
-              callbacks.onToolCall(call.name, success);
-            } else {
-              console.log(`\n[${call.name}] ${success ? "✓" : "✗"}`);
-            }
+
+            callbacks?.onToolCall?.(call.name, call.args as Record<string, unknown>, success, diff);
+
             this.conversation.push({
               role: "tool",
               toolCallId: call.id,
               content: JSON.stringify(response),
+              providerMeta: { toolName: call.name, thoughtSignature: call.thoughtSignature },
             });
           } catch (error) {
             Logger.debug("Tool execution error", { tool: call.name, error: String(error) });
-            callbacks?.onToolCall?.(call.name, false);
+            callbacks?.onToolCall?.(call.name, call.args as Record<string, unknown>, false);
             this.conversation.push({
               role: "tool",
               toolCallId: call.id,
               content: JSON.stringify({ error: String(error) }),
+              providerMeta: { toolName: call.name, thoughtSignature: call.thoughtSignature },
             });
           }
         }
@@ -161,7 +242,8 @@ export class Agent {
     }
   }
 
-  restoreConversation(messages: Message[]) {
+  // Compatibility: existing UI/CLI call sites use restoreConversation.
+  restoreConversation(messages: CanonicalMessage[]) {
     this.conversation = messages;
   }
 }

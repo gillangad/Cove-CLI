@@ -1,17 +1,14 @@
 import type { Tool, ToolInput } from "./types";
 import { resolve, join } from "node:path";
 import { readdir } from "node:fs/promises";
-import { SANDBOX_DIR } from "../../shared/config";
 
-function safePath(p: string): string | null {
-  const resolved = resolve(SANDBOX_DIR, p);
-  if (!resolved.startsWith(SANDBOX_DIR)) return null;
-  return resolved;
+function resolvePath(p: string): string {
+  return resolve(process.cwd(), p);
 }
 
 async function findFiles(pattern: string, dir: string): Promise<string[]> {
   const files: string[] = [];
-  
+
   async function walk(currentDir: string) {
     try {
       const entries = await readdir(currentDir, { withFileTypes: true });
@@ -44,20 +41,20 @@ export const searchReplaceTool: Tool = {
       pattern: { type: "string", description: "Text pattern to search for" },
       replacement: { type: "string", description: "Text to replace with" },
       glob: { type: "string", description: "File pattern like *.ts (optional, defaults to all files)" },
-      paths: { 
-        type: "array", 
+      paths: {
+        type: "array",
         items: { type: "string" },
-        description: "Specific files to search (optional, overrides glob)" 
+        description: "Specific files to search (optional, overrides glob)"
       },
     },
     required: ["pattern", "replacement"],
   },
   async execute(input: ToolInput) {
-    const { pattern, replacement, glob, paths } = input as { 
-      pattern: string; 
-      replacement: string; 
-      glob?: string; 
-      paths?: string[] 
+    const { pattern, replacement, glob, paths } = input as {
+      pattern: string;
+      replacement: string;
+      glob?: string;
+      paths?: string[]
     };
 
     if (!pattern) {
@@ -69,13 +66,12 @@ export const searchReplaceTool: Tool = {
     // Get files to search
     if (paths && paths.length > 0) {
       for (const p of paths) {
-        const safep = safePath(p);
-        if (safep) filePaths.push(safep);
+        filePaths.push(resolvePath(p));
       }
     } else {
       // Find files matching glob pattern
       const fileGlob = glob || "*";
-      filePaths = await findFiles(fileGlob, SANDBOX_DIR);
+      filePaths = await findFiles(fileGlob, process.cwd());
     }
 
     if (filePaths.length === 0) {
@@ -93,20 +89,20 @@ export const searchReplaceTool: Tool = {
         if (!exists) continue;
 
         const content = await file.text();
-        
+
         // Count occurrences
         const regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
         const matches = content.match(regex);
-        
+
         if (matches && matches.length > 0) {
           const newContent = content.split(pattern).join(replacement);
           await Bun.write(filePath, newContent);
-          
+
           filesModified++;
           totalReplacements += matches.length;
-          
+
           // Get relative path for output
-          const relativePath = filePath.replace(SANDBOX_DIR + "/", "");
+          const relativePath = filePath.replace(process.cwd() + "/", "");
           modifiedFiles.push(`${relativePath}: ${matches.length} replacements`);
         }
       } catch {

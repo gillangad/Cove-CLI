@@ -1,26 +1,27 @@
-// Peach Beachy Theme for Cove TUI
+// Brutalist dark theme for Cove TUI - matches WeaveML style
 export const theme = {
-  // Primary colors
-  peach: "#FFCCBC",
-  coral: "#FFAB91",
-  ocean: "#B2EBF2",
-  teal: "#4DD0E1",
-  sand: "#FFE0B2",
-  shell: "#FFF8E1",
-  driftwood: "#8D6E63",
+  // Background tones (can't set in terminal, but for reference)
+  bgPrimary: "#0a0a0a",
+  bgSecondary: "#141414",
+  bgTertiary: "#1e1e1e",
+
+  // Text colors
+  text: "#e0e0e0",
+  textMuted: "#606060",
+  textSecondary: "#a0a0a0",
 
   // Semantic colors
-  primary: "#FFCCBC",    // peach
-  accent: "#FFAB91",     // coral
-  success: "#4DD0E1",    // teal
-  warning: "#FFE0B2",    // sand
-  error: "#EF5350",      // red
-  muted: "#8D6E63",      // driftwood
-  
-  // Text
-  text: "#FFFFFF",
-  textMuted: "#8D6E63",
-  textHighlight: "#FFCCBC",
+  accent: "#ffffff",
+  success: "#00ff00",
+  error: "#ff3333",
+  warning: "#ffcc00",
+
+  // Aliases for components
+  primary: "#ffffff",
+  muted: "#606060",
 } as const;
 
 export type Theme = typeof theme;
+
+// Spinner frames for tool call animations
+export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];

@@ -1,11 +1,8 @@
 import type { Tool, ToolInput } from "./types";
 import { resolve } from "node:path";
-import { SANDBOX_DIR } from "../../shared/config";
 
-function safePath(p: string): string | null {
-  const resolved = resolve(SANDBOX_DIR, p);
-  if (!resolved.startsWith(SANDBOX_DIR)) return null;
-  return resolved;
+function resolvePath(p: string): string {
+  return resolve(process.cwd(), p);
 }
 
 export const batchReadTool: Tool = {
@@ -14,30 +11,27 @@ export const batchReadTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      paths: { 
-        type: "array", 
+      paths: {
+        type: "array",
         items: { type: "string" },
-        description: "Array of file paths relative to sandbox" 
+        description: "Array of file paths (relative or absolute)"
       },
     },
     required: ["paths"],
   },
   async execute(input: ToolInput) {
     const { paths } = input as { paths: string[] };
-    
+
     if (!paths || paths.length === 0) {
       return { error: "No paths provided" };
     }
 
     const results = await Promise.all(
       paths.map(async (p) => {
-        const safep = safePath(p);
-        if (!safep) {
-          return { path: p, error: "Path outside sandbox" };
-        }
+        const resolvedPath = resolvePath(p);
 
         try {
-          const file = Bun.file(safep);
+          const file = Bun.file(resolvedPath);
           const exists = await file.exists();
           if (!exists) {
             return { path: p, error: "File not found" };

@@ -8,8 +8,8 @@ interface HeaderProps {
 
 export function Header({ title = "Cove" }: HeaderProps) {
   return (
-    <Box borderStyle="single" borderColor={theme.peach} paddingX={1} justifyContent="center">
-      <Text color={theme.peach} bold>{title}</Text>
+    <Box paddingX={1} borderStyle="single" borderColor={theme.muted}>
+      <Text color={theme.accent} bold>{title}</Text>
     </Box>
   );
 }

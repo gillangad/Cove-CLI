@@ -16,7 +16,8 @@ export function Sessions({ onSelect, onClose }: SessionsProps) {
     setSessions(listSessions());
   }, []);
 
-  useInput((input, key) => {
+  useInput(
+    (input, key) => {
     if (key.escape || input === "q") {
       onClose();
       return;
@@ -36,7 +37,9 @@ export function Sessions({ onSelect, onClose }: SessionsProps) {
       onSelect(sessions[selectedIndex]);
       return;
     }
-  });
+    },
+    { isActive: true }
+  );
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -47,12 +50,12 @@ export function Sessions({ onSelect, onClose }: SessionsProps) {
     <Box
       flexDirection="column"
       borderStyle="double"
-      borderColor={theme.peach}
+      borderColor={theme.accent}
       paddingX={2}
       paddingY={1}
     >
       <Box marginBottom={1}>
-        <Text color={theme.peach} bold>Sessions</Text>
+        <Text color={theme.accent} bold>Sessions</Text>
       </Box>
 
       {sessions.length === 0 ? (
@@ -64,7 +67,7 @@ export function Sessions({ onSelect, onClose }: SessionsProps) {
           {sessions.slice(0, 10).map((session, i) => (
             <Box key={session.id}>
               <Text
-                color={i === selectedIndex ? theme.coral : undefined}
+                color={i === selectedIndex ? theme.accent : undefined}
                 inverse={i === selectedIndex}
               >
                 {" "}
@@ -72,7 +75,9 @@ export function Sessions({ onSelect, onClose }: SessionsProps) {
                 {"  "}
                 <Text color={theme.muted}>{formatDate(session.updatedAt)}</Text>
                 {"  "}
-                <Text color={theme.ocean}>{session.variant}</Text>
+                <Text color={theme.textSecondary}>{session.variant}</Text>
+                {"  "}
+                <Text color={theme.muted}>{session.modelId}</Text>
               </Text>
             </Box>
           ))}

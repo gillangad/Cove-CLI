@@ -22,7 +22,8 @@ export function ConfirmDialog({ message, command, onChoice, showAlways = true }:
     options.push({ label: "Always Allow", value: "always" });
   }
 
-  useInput((input, key) => {
+  useInput(
+    (input, key) => {
     if (key.leftArrow) {
       setSelected(prev => Math.max(0, prev - 1));
     } else if (key.rightArrow) {
@@ -36,7 +37,9 @@ export function ConfirmDialog({ message, command, onChoice, showAlways = true }:
     } else if (input === "a" && showAlways) {
       onChoice("always");
     }
-  });
+    },
+    { isActive: true }
+  );
 
   return (
     <Box
@@ -55,7 +58,7 @@ export function ConfirmDialog({ message, command, onChoice, showAlways = true }:
       {command && (
         <Box marginTop={1}>
           <Text color={theme.muted}>Command: </Text>
-          <Text color={theme.coral}>{command}</Text>
+          <Text color={theme.accent}>{command}</Text>
         </Box>
       )}
       
@@ -63,7 +66,7 @@ export function ConfirmDialog({ message, command, onChoice, showAlways = true }:
         {options.map((opt, i) => (
           <Text
             key={opt.value}
-            color={i === selected ? theme.peach : theme.muted}
+            color={i === selected ? theme.accent : theme.muted}
             bold={i === selected}
           >
             {i === selected ? `[${opt.label}]` : ` ${opt.label} `}

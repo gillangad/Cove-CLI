@@ -2,13 +2,5 @@
   "default": {
     "tools": ["read", "edit", "write", "delete", "move", "bash", "grep", "glob", "batch_read", "search_replace"],
     "prompt": "./prompts/default.md"
-  },
-  "ml": {
-    "tools": ["read", "edit", "write", "delete", "move", "bash", "grep", "glob", "batch_read", "search_replace"],
-    "prompt": "./prompts/ml.md"
-  },
-  "code": {
-    "tools": ["read", "edit", "write", "delete", "move", "bash", "grep", "glob", "batch_read", "search_replace"],
-    "prompt": "./prompts/code.md"
   }
 }

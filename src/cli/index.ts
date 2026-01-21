@@ -7,6 +7,7 @@ import { shellManager } from "../shared/shell-manager";
 import { loadVariant, listVariants } from "../shared/variants";
 import { getTools } from "../core/tools/registry";
 import { saveSession, loadSession, listSessions, deleteSession } from "../core/session";
+import { listModelsByProvider, resolveModelId, type ProviderName } from "../core/llm/models";
 
 // Load .env from ~/.cove/.env or cwd/.env
 loadEnv();
@@ -25,6 +26,9 @@ Commands:
   /clear       - Reset conversation
   /compact     - Summarize and compress context
   /context     - Show context window usage
+  /models      - List curated models
+  /provider X  - Set provider (glm|openai|anthropic|google)
+  /model X     - Set model (short or provider/model)
 
 Sessions:
   /sessions    - List saved sessions
@@ -95,6 +99,16 @@ export async function runCLI(args: string[]) {
   const variantName = variants.includes(cmd ?? "") ? cmd : undefined;
   const variant = loadVariant(variantName);
   const tools = getTools(variant.tools);
+
+  const callbacks = {
+    onChunk: (text: string) => {
+      stdout.write(text);
+    },
+    onToolCall: (name: string, _args: Record<string, unknown>, success: boolean) => {
+      stdout.write("\n");
+      console.log(`[${name}] ${success ? "✓" : "✗"}`);
+    },
+  };
   
   const createAgent = () => new Agent(tools, variant.prompt);
 
@@ -102,7 +116,23 @@ export async function runCLI(args: string[]) {
   const runIndex = args.indexOf("run");
   if (runIndex !== -1 && args[runIndex + 1]) {
     const agent = createAgent();
-    await agent.chat(args.slice(runIndex + 1).join(" "));
+    const prompt = args.slice(runIndex + 1).join(" ");
+
+    // Support slash commands in non-interactive mode for quick listings.
+    if (prompt.trim() === "/models") {
+      const grouped = listModelsByProvider();
+      console.log("Models:");
+      for (const [provider, models] of Object.entries(grouped)) {
+        console.log(`\n${provider}:`);
+        for (const m of models) {
+          console.log(`  ${m.id}`);
+        }
+      }
+      shellManager.killAll();
+      process.exit(0);
+    }
+
+    await agent.chat(prompt, callbacks);
     shellManager.killAll();
     process.exit(0);
   }
@@ -115,6 +145,7 @@ export async function runCLI(args: string[]) {
   const rl = readline.createInterface({ input: stdin, output: stdout });
   let agent = createAgent();
   let currentSessionId: string | undefined;
+  let providerScope: ProviderName = "glm";
 
   while (true) {
     const input = await rl.question("> ");
@@ -128,7 +159,7 @@ export async function runCLI(args: string[]) {
         saveSession(agent.getConversation(), {
           id: currentSessionId,
           variant: variantName,
-          model: "glm-4.7",
+          modelId: agent.getModelId(),
         });
       }
       const killed = shellManager.killAll();
@@ -145,7 +176,13 @@ export async function runCLI(args: string[]) {
     }
 
     if (trimmed === "/clear") {
+      const previousModelId = agent.getModelId();
       agent = createAgent();
+      try {
+        agent.setModel(previousModelId);
+      } catch {
+        // ignore
+      }
       currentSessionId = undefined;
       console.log("Conversation cleared.");
       continue;
@@ -178,7 +215,7 @@ export async function runCLI(args: string[]) {
         id: currentSessionId,
         title: customTitle,
         variant: variantName,
-        model: "glm-4.7",
+        modelId: agent.getModelId(),
       });
       currentSessionId = session.id;
       console.log(`Saved session: ${session.id} (${session.title})`);
@@ -194,6 +231,15 @@ export async function runCLI(args: string[]) {
         agent = createAgent();
         agent.setConversation(session.conversation);
         currentSessionId = session.id;
+        const maybeScope = (session.modelId?.split("/")[0] || "glm") as ProviderName;
+        providerScope = maybeScope;
+        if (session.modelId) {
+          try {
+            agent.setModel(session.modelId);
+          } catch {
+            // ignore
+          }
+        }
         console.log(`Loaded session: ${session.title}`);
         console.log(`Messages: ${session.conversation.length}`);
       }
@@ -206,13 +252,55 @@ export async function runCLI(args: string[]) {
         const session = saveSession(agent.getConversation(), {
           id: currentSessionId,
           variant: variantName,
-          model: "glm-4.7",
+          modelId: agent.getModelId(),
         });
         console.log(`Saved: ${session.id}`);
       }
       agent = createAgent();
       currentSessionId = undefined;
       console.log("Started new session.");
+      continue;
+    }
+
+    if (trimmed === "/models") {
+      const grouped = listModelsByProvider();
+      console.log("\nModels:");
+      for (const [provider, models] of Object.entries(grouped)) {
+        console.log(`\n${provider}:`);
+        for (const m of models) {
+          console.log(`  ${m.id}`);
+        }
+      }
+      console.log("");
+      continue;
+    }
+
+    if (trimmed.startsWith("/provider ")) {
+      const name = trimmed.slice(10).trim() as ProviderName;
+      providerScope = name;
+      try {
+        agent.setProvider(name);
+        console.log(`Provider set to ${name}. Model: ${agent.getModelId()}`);
+      } catch (e) {
+        console.log(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("/model ")) {
+      const arg = trimmed.slice(7).trim();
+      const resolved = resolveModelId(arg, providerScope);
+      if (!resolved) {
+        console.log(`Unknown model: ${arg}`);
+        continue;
+      }
+      try {
+        agent.setModel(resolved);
+        providerScope = agent.getModelId().split("/")[0] as ProviderName;
+        console.log(`Model set to ${agent.getModelId()}`);
+      } catch (e) {
+        console.log(`Error: ${e instanceof Error ? e.message : String(e)}`);
+      }
       continue;
     }
 
@@ -315,7 +403,7 @@ export async function runCLI(args: string[]) {
       continue;
     }
 
-    await agent.chat(trimmed);
+    await agent.chat(trimmed, callbacks);
 
     stdout.write("\n");
   }

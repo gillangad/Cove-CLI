@@ -1,12 +1,9 @@
 import type { Tool, ToolInput } from "./types";
 import { resolve } from "node:path";
 import { rm, stat } from "node:fs/promises";
-import { SANDBOX_DIR } from "../../shared/config";
 
-function safePath(p: string): string | null {
-  const resolved = resolve(SANDBOX_DIR, p);
-  if (!resolved.startsWith(SANDBOX_DIR)) return null;
-  return resolved;
+function resolvePath(p: string): string {
+  return resolve(process.cwd(), p);
 }
 
 export const deleteTool: Tool = {
@@ -15,13 +12,12 @@ export const deleteTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      path: { type: "string", description: "File or directory path relative to sandbox" },
+      path: { type: "string", description: "File or directory path (relative or absolute)" },
     },
     required: ["path"],
   },
   async execute(input: ToolInput) {
-    const path = safePath(input.path as string);
-    if (!path) return { error: "Path outside sandbox" };
+    const path = resolvePath(input.path as string);
 
     try {
       // Check if path exists
@@ -32,7 +28,7 @@ export const deleteTool: Tool = {
 
       const isDir = stats.isDirectory();
       await rm(path, { recursive: true, force: true });
-      
+
       return `Deleted ${isDir ? "directory" : "file"}: ${input.path}`;
     } catch (e) {
       return { error: `Failed to delete: ${e}` };

@@ -1,5 +1,6 @@
 import type { Tool, ToolInput } from "./types";
-import { SANDBOX_DIR } from "../../shared/config";
+import { resolve } from "node:path";
+import { parseErrors, getErrorSummary, type ParsedError } from "../../shared/error-parser";
 
 const MAX_OUTPUT = 30 * 1024;
 const HALF = 15 * 1024;
@@ -12,7 +13,7 @@ function truncate(text: string): string {
 
 export const bashTool: Tool = {
   name: "bash",
-  description: "Execute a shell command and return the output.",
+  description: "Execute a shell command and return its output.",
   inputSchema: {
     type: "object",
     properties: {
@@ -24,7 +25,7 @@ export const bashTool: Tool = {
     const { command } = input as { command: string };
 
     const proc = Bun.spawn(["bash", "-c", command], {
-      cwd: SANDBOX_DIR,
+      cwd: process.cwd(),
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -40,10 +41,33 @@ export const bashTool: Tool = {
 
       const exitCode = await proc.exited;
       const output = (stdout + stderr).trim();
+      
+      // Parse errors from output
+      const parsedErrors = parseErrors(output);
+      const errorSummary = getErrorSummary(parsedErrors);
 
       if (exitCode !== 0) {
-        return { error: truncate(output || `Exit code: ${exitCode}`) };
+        const result: { error: string; parsedErrors?: ParsedError[]; errorSummary?: { errors: number; warnings: number } } = {
+          error: truncate(output || `Exit code: ${exitCode}`),
+        };
+        
+        if (parsedErrors.length > 0) {
+          result.parsedErrors = parsedErrors;
+          result.errorSummary = errorSummary;
+        }
+        
+        return result;
       }
+      
+      // Even successful commands might have warnings
+      if (parsedErrors.length > 0) {
+        return {
+          output: truncate(output),
+          parsedErrors,
+          errorSummary,
+        };
+      }
+      
       return truncate(output);
     } catch (e) {
       clearTimeout(timeout);

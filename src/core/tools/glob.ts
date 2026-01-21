@@ -1,12 +1,11 @@
 import type { Tool } from "./types";
 import { Glob } from "bun";
-import { SANDBOX_DIR } from "../../shared/config";
 
 const IGNORE_DIRS = new Set(["node_modules", ".git", ".hg", ".svn", "dist", "build"]);
 
 export const globTool: Tool = {
   name: "glob",
-  description: "Find files matching a glob pattern in sandbox. Returns list of matching file paths.",
+  description: "Find files matching a glob pattern. Returns list of matching file paths.",
   inputSchema: {
     type: "object",
     properties: {
@@ -19,14 +18,14 @@ export const globTool: Tool = {
     try {
       const glob = new Glob(pattern);
       const matches: string[] = [];
-      
-      for await (const file of glob.scan({ cwd: SANDBOX_DIR, onlyFiles: true })) {
+
+      for await (const file of glob.scan({ cwd: process.cwd(), onlyFiles: true })) {
         const parts = file.split("/");
         if (parts.some((p) => IGNORE_DIRS.has(p))) continue;
         matches.push(file);
         if (matches.length >= 500) break;
       }
-      
+
       if (matches.length === 0) return "No files found matching pattern.";
       return matches.join("\n");
     } catch (e) {
